@@ -2,6 +2,7 @@
 
 [ext_resource type="Script" uid="uid://bmaqj1ggk4ifx" path="res://main.gd" id="1"]
 [ext_resource type="AudioStream" path="res://audio/The_Caretaker_-_Libet_s_Delay_(mp3.pm).mp3" id="2_0xm2m"]
+[ext_resource type="PackedScene" uid="uid://bdoicq4tnihqo" path="res://scenes/objects/bounce_platform.tscn" id="3_h2yge"]
 
 [node name="Main" type="Node2D" unique_id=1619790951]
 script = ExtResource("1")
@@ -9,3 +10,5 @@ script = ExtResource("1")
 [node name="Music" type="AudioStreamPlayer" parent="." unique_id=1253385293]
 stream = ExtResource("2_0xm2m")
 autoplay = true
+
+[node name="Bounce Platform" parent="." unique_id=1795332355 instance=ExtResource("3_h2yge")]

@@ -169,7 +169,11 @@ func _build_level() -> void:
 
 	# ---------------- Area I: The Ballroom ----------------
 	_floor(0.0, 1400.0)
-	var frag := Interactable.new().setup("fragment", Vector2(650, FLOOR_Y), "wind the music box")
+	var frag := Interactable.new().setup(
+	"fragment",
+	Vector2(675, 340),
+    "wind the music box"
+)
 	add_child(frag)
 	var d1 := _make_door(1312.0, "open the door")
 	door1 = d1[0]
@@ -189,6 +193,16 @@ func _build_level() -> void:
 		wall1.set_enabled(false)
 		_sfx("chime")
 		_show_text("that wasn't a hallway before.", 4.0)
+
+# Ballroom bounce puzzle
+	_add_bounce_platform(Vector2(510, 540), 750.0)
+
+# Elevated ledge that cannot be reached by normal jumping
+	add_child(
+		Solid.new().setup(
+			Rect2(585, 340, 190, 16)
+	)
+)
 
 	# ---------------- Area II: The Gallery ----------------
 	_floor(1400.0, 2000.0)
@@ -794,3 +808,9 @@ func _run_ending() -> void:
 		await get_tree().create_timer(3.2).timeout
 	end_label.text += "[ENTER]  play again"
 	end_ready = true
+	
+func _add_bounce_platform(pos: Vector2, strength: float) -> void:
+	var platform := BouncePlatform.new()
+	platform.position = pos
+	platform.bounce_strength = strength
+	add_child(platform)

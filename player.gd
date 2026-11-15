@@ -13,6 +13,7 @@ const ACCEL := 1600.0
 const FRICTION := 1800.0
 const GRAVITY := 1200.0
 const JUMP_VELOCITY := -450.0
+const BOUNCE_VELOCITY := -700.0
 const MAX_FALL := 700.0
 const COYOTE := 0.1
 const BUFFER := 0.12
@@ -86,6 +87,18 @@ func _physics_process(delta: float) -> void:
 
 	var was_on_floor := is_on_floor()
 	move_and_slide()
+
+	for i in get_slide_collision_count():
+		var collision := get_slide_collision(i)
+		var collider := collision.get_collider()
+
+		if collider is BouncePlatform and collision.get_normal().y < -0.5:
+			velocity.y = -collider.bounce_strength
+			_coyote = 0.0
+			_buffer = 0.0
+			_squash = Vector2(0.75, 1.4)
+			break
+
 	if not was_on_floor and is_on_floor():
 		_squash = Vector2(1.3, 0.7)
 		landed.emit()
@@ -151,12 +164,12 @@ func _build_sprite() -> void:
 	sprite = AnimatedSprite2D.new()
 	sprite.sprite_frames = frames
 	sprite.centered = false
+	
 	# frame is 20 wide; the feet sit on row 25, so the last two rows hang just below the origin
 	sprite.offset = Vector2(-FRAME.x / 2.0, -(FRAME.y - 1.0))
 	sprite.scale = Vector2(Util.PX, Util.PX)
 	add_child(sprite)
 	sprite.play("idle")
-
 
 func _add_anim(frames: SpriteFrames, sheet: Texture2D, anim: String, idx: Array, fps: float) -> void:
 	frames.add_animation(anim)
