@@ -1,7 +1,7 @@
 class_name Player
 extends CharacterBody2D
 ## Platformer controller + Echo / Recollection abilities. Origin is the player's feet.
-## Drawn with placeholder shapes; replace _draw() with an AnimatedSprite2D when art is ready.
+## Animated from res://art/player.png (see _build_sprite).
 
 signal echo_cast(origin: Vector2)
 signal recollect_cast(origin: Vector2)
@@ -33,17 +33,19 @@ var _coyote := 0.0
 var _buffer := 0.0
 var _cooldown := 0.0
 var _step_timer := 0.0
-var _anim := 0.0
 var _squash := Vector2.ONE
+var sprite: AnimatedSprite2D
 
 
 func _ready() -> void:
 	var shape := RectangleShape2D.new()
-	shape.size = Vector2(18, 38)
+	shape.size = Vector2(16, 44)
 	var col := CollisionShape2D.new()
 	col.shape = shape
-	col.position = Vector2(0, -19)
+	col.position = Vector2(0, -22)
 	add_child(col)
+
+	_build_sprite()
 
 	glow = PointLight2D.new()
 	glow.texture = Util.radial_texture()
@@ -98,7 +100,6 @@ func _physics_process(delta: float) -> void:
 
 
 func _process(delta: float) -> void:
-	_anim += delta
 	_cooldown = maxf(0.0, _cooldown - delta)
 	_squash = _squash.lerp(Vector2.ONE, clampf(delta * 12.0, 0.0, 1.0))
 	if controls_enabled and _cooldown <= 0.0:
@@ -113,7 +114,7 @@ func _process(delta: float) -> void:
 			get_tree().call_group("restorable", "on_recollect", origin, RECOLLECT_RADIUS, RECOLLECT_DURATION)
 			recollect_cast.emit(origin)
 			_squash = Vector2(1.2, 0.85)
-	queue_redraw()
+	_update_animation()
 
 
 ## Closest usable Interactable within reach, or null.
@@ -132,19 +133,49 @@ func get_nearest_interactable() -> Interactable:
 	return best
 
 
-func _draw() -> void:
-	draw_set_transform(Vector2.ZERO, 0.0, _squash)
-	var moving := is_on_floor() and absf(velocity.x) > 20.0
-	var bob := absf(sin(_anim * 14.0)) * 2.0 if moving else 0.0
-	var leg := sin(_anim * 14.0) * 4.0 if moving else 0.0
-	var leg_col := Palette.PLAYER_BODY.darkened(0.35)
-	draw_rect(Rect2(-7 + leg, -12, 6, 12), leg_col)
-	draw_rect(Rect2(1 - leg, -12, 6, 12), leg_col)
-	draw_rect(Rect2(-8, -34 - bob, 16, 24), Palette.PLAYER_BODY)
-	draw_circle(Vector2(0, -41 - bob), 8.0, Palette.PLAYER_BODY)
-	# scarf: neck band plus a tail that trails behind
-	draw_rect(Rect2(-8, -36 - bob, 16, 4), Palette.PLAYER_SCARF)
-	var tail_x := -18.0 if facing > 0.0 else 8.0
-	draw_rect(Rect2(tail_x, -36 - bob + sin(_anim * 8.0) * 2.0, 10, 5), Palette.PLAYER_SCARF)
-	draw_rect(Rect2(facing * 3.0 - 1.0, -43 - bob, 2, 3), Palette.INK)
-	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+# --- Sprite ------------------------------------------------------------------
+# res://art/player.png is a strip of 20x27 frames:
+#   0-1 idle   2-5 walk   6 jump (rising)   7 fall
+
+const FRAME := Vector2i(20, 27)
+
+
+func _build_sprite() -> void:
+	var sheet := Util.tex("player")
+	var frames := SpriteFrames.new()
+	frames.remove_animation("default")
+	_add_anim(frames, sheet, "idle", [0, 1], 2.0)
+	_add_anim(frames, sheet, "walk", [2, 3, 4, 5], 9.0)
+	_add_anim(frames, sheet, "jump", [6], 1.0)
+	_add_anim(frames, sheet, "fall", [7], 1.0)
+	sprite = AnimatedSprite2D.new()
+	sprite.sprite_frames = frames
+	sprite.centered = false
+	# frame is 20 wide; the feet sit on row 25, so the last two rows hang just below the origin
+	sprite.offset = Vector2(-FRAME.x / 2.0, -(FRAME.y - 1.0))
+	sprite.scale = Vector2(Util.PX, Util.PX)
+	add_child(sprite)
+	sprite.play("idle")
+
+
+func _add_anim(frames: SpriteFrames, sheet: Texture2D, anim: String, idx: Array, fps: float) -> void:
+	frames.add_animation(anim)
+	frames.set_animation_speed(anim, fps)
+	frames.set_animation_loop(anim, true)
+	for i in idx:
+		var at := AtlasTexture.new()
+		at.atlas = sheet
+		at.region = Rect2(i * FRAME.x, 0, FRAME.x, FRAME.y)
+		frames.add_frame(anim, at)
+
+
+func _update_animation() -> void:
+	var want := "idle"
+	if not is_on_floor():
+		want = "jump" if velocity.y < 0.0 else "fall"
+	elif absf(velocity.x) > 20.0:
+		want = "walk"
+	if sprite.animation != want:
+		sprite.play(want)
+	sprite.flip_h = facing < 0.0
+	sprite.scale = Vector2(Util.PX, Util.PX) * _squash

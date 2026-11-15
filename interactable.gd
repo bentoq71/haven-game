@@ -4,16 +4,16 @@ extends Node2D
 ## kind: "orb_echo", "orb_recollect", "fragment", "door", "exit", "object"
 
 var kind := "object"
-var prompt := "Interact"
+var prompt := "interact"
 var hidden_until_echo := false
 var used := false
 var opened := false
 var locked := false
+var odd := false                # the one "different" door in the corridor (red handle)
 var active := true
 var shape := ""                 # for kind "object": chair / clock / musicbox
 var symbol_count := 0           # dots shown above an object while Echo is active
 var color := Palette.MEMORY
-var knob := Palette.MEMORY
 var on_use: Callable = Callable()
 
 var visible_time := 0.0
@@ -71,82 +71,68 @@ func _draw() -> void:
 			_draw_object()
 
 
+func _glow(p: Vector2, r: float, c: Color) -> void:
+	for i in 4:
+		draw_circle(p, r - i * (r / 5.0), Color(c, 0.06 + i * 0.07))
+
+
 func _draw_orb() -> void:
-	draw_rect(Rect2(-16, -28, 32, 28), Color("3a3048"))
-	draw_rect(Rect2(-20, -34, 40, 8), Color("5a4a6a"))
+	Util.draw_px(self, Util.tex("pedestal"), Vector2.ZERO)
 	if used:
 		return
-	var p := Vector2(0, -62 + sin(_t * 2.0) * 4.0)
-	for i in 4:
-		draw_circle(p, 26.0 - i * 5.0, Color(color, 0.08 + i * 0.1))
-	draw_circle(p, 8.0, color.lightened(0.5))
+	var p := Vector2(0, -50 + sin(_t * 2.0) * 4.0)
+	_glow(p, 30.0, color)
+	var o := Util.tex("orb_echo" if kind == "orb_echo" else "orb_amber")
+	draw_texture_rect(o, Rect2(p - Vector2(8, 8), Vector2(16, 16)), false)
 
 
 func _draw_fragment() -> void:
-	draw_rect(Rect2(-26, -34, 52, 6), Color("5a3d2e"))
-	draw_rect(Rect2(-22, -28, 5, 28), Color("4a3225"))
-	draw_rect(Rect2(17, -28, 5, 28), Color("4a3225"))
-	draw_rect(Rect2(-14, -48, 28, 14), Color("8a5a3a"))
-	draw_rect(Rect2(-14, -52, 28, 5), Color("a8714a"))
+	Util.draw_px(self, Util.tex("table_musicbox"), Vector2.ZERO)
 	if used:
 		return
-	var p := Vector2(0, -78 + sin(_t * 2.0) * 4.0)
-	for i in 4:
-		draw_circle(p, 22.0 - i * 5.0, Color(Palette.MEMORY, 0.07 + i * 0.07))
-	draw_colored_polygon(PackedVector2Array([
-		p + Vector2(0, -9), p + Vector2(7, 0), p + Vector2(0, 9), p + Vector2(-7, 0)
-	]), Palette.MEMORY)
+	var p := Vector2(0, -74 + sin(_t * 2.0) * 4.0)
+	_glow(p, 24.0, Palette.MEMORY)
+	var s := Util.tex("shard")
+	draw_texture_rect(s, Rect2(p - Vector2(8, 10), Vector2(16, 20)), false)
 
 
 func _draw_door() -> void:
-	var col := Color("6b4a3a") if kind == "door" else Color("f2efe6")
+	var t: Texture2D
+	if kind == "exit":
+		t = Util.tex("exit")
+	elif odd:
+		t = Util.tex("door_odd")
+	else:
+		t = Util.tex("door")
 	var a := 1.0
 	var r := Rect2(-28, -100, 56, 100)
-	if hidden_until_echo and not opened:
-		a = clampf(visible_time / 0.4, 0.0, 1.0)
-		col = Palette.ECHO if kind == "door" else Color("f2efe6")
-		if a <= 0.0:
-			draw_rect(r, Color(Palette.ECHO, 0.05 + 0.03 * sin(_t * 3.0)), false, 2.0)
-			return
 	if opened:
-		draw_rect(r, Color("07050a"))
-		draw_rect(r, Color(Palette.MEMORY, 0.5), false, 2.0)
+		Util.draw_px(self, Util.tex("door_open"), Vector2.ZERO)
 		return
-	draw_rect(r, Color(col, a))
-	draw_rect(Rect2(-22, -94, 44, 88), Color(col.darkened(0.25), a))
-	draw_circle(Vector2(16, -50), 4.0, Color(knob, a))
+	if hidden_until_echo:
+		a = clampf(visible_time / 0.4, 0.0, 1.0)
+		if a <= 0.0:
+			# a faint seam in the wall, only if you're looking for it
+			var f := 0.06 + 0.04 * sin(_t * 3.0)
+			draw_rect(r, Color(Palette.ECHO, f), false, 2.0)
+			return
+	Util.draw_px(self, t, Vector2.ZERO, Color(1, 1, 1, a))
 	if kind == "exit":
-		for i in 3:
-			draw_rect(Rect2(-28 - i * 4, -100 - i * 4, 56 + i * 8, 100 + i * 4), Color(1, 1, 1, 0.06 * a), false, 2.0)
+		_glow(Vector2(0, -50), 70.0, Color(1, 1, 1))
 	if locked:
-		draw_rect(Rect2(-6, -66, 12, 10), Color(Palette.PLAYER_SCARF, a))
+		draw_rect(Rect2(8, -60, 12, 10), Color(Palette.PLAYER_SCARF, a))
+		draw_rect(Rect2(10, -66, 8, 6), Color(0.1, 0.07, 0.1, a), false, 2.0)
 
 
 func _draw_object() -> void:
-	var col := Palette.BALLROOM_ACCENT.darkened(0.35)
+	var t := Util.tex(shape)
 	if lit_time > 0.0:
-		for i in 3:
-			draw_circle(Vector2(0, -40), 50.0 - i * 12.0, Color(Palette.MEMORY, 0.08 * lit_time))
-	match shape:
-		"chair":
-			draw_rect(Rect2(-14, -24, 28, 6), col)
-			draw_rect(Rect2(-14, -56, 6, 36), col)
-			draw_rect(Rect2(-14, -18, 5, 18), col.darkened(0.2))
-			draw_rect(Rect2(9, -18, 5, 18), col.darkened(0.2))
-		"clock":
-			draw_rect(Rect2(-16, -92, 32, 92), col)
-			draw_rect(Rect2(-12, -88, 24, 40), col.darkened(0.3))
-			draw_circle(Vector2(0, -68), 9.0, Color("d8cdb8"))
-			draw_line(Vector2(0, -68), Vector2(0, -75), Palette.INK, 2.0)
-			draw_line(Vector2(0, -68), Vector2(5, -66), Palette.INK, 2.0)
-			draw_rect(Rect2(-8, -40, 16, 34), col.darkened(0.45))
-		"musicbox":
-			draw_rect(Rect2(-18, -24, 36, 24), Color("8a5a3a"))
-			draw_rect(Rect2(-20, -32, 40, 8), Color("a8714a"))
-			draw_line(Vector2(18, -14), Vector2(26, -20), Color("d8cdb8"), 2.0)
+		_glow(Vector2(0, -40), 56.0, Palette.MEMORY * Color(1, 1, 1, lit_time))
+	Util.draw_px(self, t, Vector2.ZERO)
 	if symbol_time > 0.0:
 		var a := clampf(symbol_time / 0.4, 0.0, 1.0)
+		var top := -t.get_height() * Util.PX - 18.0
 		for i in symbol_count:
 			var x := (i - (symbol_count - 1) * 0.5) * 16.0
-			draw_circle(Vector2(x, -112), 6.0, Color(Palette.ECHO, 0.35 * a))
-			draw_circle(Vector2(x, -112), 3.5, Color(Palette.ECHO.lightened(0.5), a))
+			draw_circle(Vector2(x, top), 6.0, Color(Palette.ECHO, 0.35 * a))
+			draw_circle(Vector2(x, top), 3.5, Color(Palette.ECHO.lightened(0.5), a))

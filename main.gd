@@ -11,7 +11,7 @@ const SCREEN := Vector2(1152, 648)
 enum State { TITLE, PLAYING, ENDING }
 
 const AREA_NAMES := ["THE BALLROOM", "THE GALLERY", "THE CORRIDOR", "THE FORGOTTEN ROOM"]
-const AREA_MOD := [Color(0.95, 0.88, 0.82), Color(0.62, 0.70, 0.72), Color(0.40, 0.36, 0.52), Color(0.14, 0.12, 0.19)]
+const AREA_MOD := [Color(0.95, 0.88, 0.82), Color(0.66, 0.74, 0.76), Color(0.60, 0.54, 0.74), Color(0.28, 0.24, 0.36)]
 const AREA_LIGHT_SCALE := [3.2, 2.8, 2.4, 1.9]
 const AREA_LIGHT_ENERGY := [0.15, 0.3, 0.55, 0.9]
 const AREA_MELODY_DB := [-14.0, -20.0, -24.0, -80.0]
@@ -59,15 +59,17 @@ var end_ready := false
 var ui: CanvasLayer
 var msg_label: Label
 var prompt_label: Label
-var hud_label: Label
+var hud_echo: Control
+var hud_rec: Control
+var msg_panel: NinePatchRect
+var type_pos := 0.0
 var title_panel: ColorRect
 var fade_rect: ColorRect
 var end_label: Label
 var msg_timer := 0.0
 
-# audio
-var drone: AudioStreamPlayer
-var melody: AudioStreamPlayer
+ # audio
+var music: AudioStreamPlayer
 var sfx := {}
 
 
@@ -146,7 +148,7 @@ func _floor(x0: float, x1: float) -> void:
 
 
 func _wall_block(x: float, w: float, col: Color, show_wall: bool = true) -> Solid:
-	var s := Solid.new().setup(Rect2(x, 120.0, w, FLOOR_Y - 120.0), Solid.Mode.NORMAL, col, col.lightened(0.15))
+	var s := Solid.new().setup(Rect2(x, 120.0, w, FLOOR_Y - 120.0), Solid.Mode.NORMAL, "wall")
 	s.visible = show_wall
 	add_child(s)
 	return s
@@ -167,9 +169,9 @@ func _build_level() -> void:
 
 	# ---------------- Area I: The Ballroom ----------------
 	_floor(0.0, 1400.0)
-	var frag := Interactable.new().setup("fragment", Vector2(650, FLOOR_Y), "Wind the music box")
+	var frag := Interactable.new().setup("fragment", Vector2(650, FLOOR_Y), "wind the music box")
 	add_child(frag)
-	var d1 := _make_door(1312.0, "Open the door")
+	var d1 := _make_door(1312.0, "open the door")
 	door1 = d1[0]
 	wall1 = d1[1]
 	door1.locked = true
@@ -178,64 +180,64 @@ func _build_level() -> void:
 		fragment_collected = true
 		door1.locked = false
 		_sfx("chime")
-		_show_text("A music box. The melody is almost familiar. Somewhere, a lock gives way.", 5.0)
+		_show_text("a music box. i know this song. i just can't remember who played it for me.\nsomething clicked, over by the door.", 5.0)
 	door1.on_use = func():
 		if not fragment_collected:
-			_show_text("Locked. Something is missing... a memory, maybe.", 4.0)
+			_show_text("locked. there has to be something in here that opens it.", 4.0)
 			return
 		door1.opened = true
 		wall1.set_enabled(false)
 		_sfx("chime")
-		_show_text("The door opens onto somewhere that shouldn't exist.", 4.0)
+		_show_text("that wasn't a hallway before.", 4.0)
 
 	# ---------------- Area II: The Gallery ----------------
 	_floor(1400.0, 2000.0)
 	_floor(2500.0, 3000.0)
-	var orb_e := Interactable.new().setup("orb_echo", Vector2(1700, FLOOR_Y), "Take the glowing echo")
+	var orb_e := Interactable.new().setup("orb_echo", Vector2(1700, FLOOR_Y), "take the glowing thing")
 	orb_e.color = Palette.ECHO
 	add_child(orb_e)
 	orb_e.on_use = func():
 		orb_e.used = true
 		player.has_echo = true
 		_sfx("chime")
-		_show_text("ECHO.  Press Q to send out a pulse. Remember what was forgotten.", 6.0)
+		_show_text("oh. the room answers when i call out to it. [Q] to listen.", 6.0)
 	# Hidden stepping stones across the pit (revealed by Echo)
 	for r in [Rect2(2040, 500, 90, 20), Rect2(2190, 460, 90, 20), Rect2(2340, 500, 90, 20)]:
-		add_child(Solid.new().setup(r, Solid.Mode.HIDDEN, Palette.ECHO, Palette.ECHO))
+		add_child(Solid.new().setup(r, Solid.Mode.HIDDEN, "slab"))
 	# Hidden doorway out of the Gallery
-	var d2 := _make_door(2902.0, "Step through the hidden door", true)
+	var d2 := _make_door(2902.0, "open the hidden door", true)
 	var door2: Interactable = d2[0]
 	var wall2: Solid = d2[1]
 	door2.on_use = func():
 		door2.opened = true
 		wall2.set_enabled(false)
 		_sfx("chime")
-		_show_text("A door that was always there. You just forgot it.", 4.0)
+		_show_text("it was here the whole time. i just wasn't looking.", 4.0)
 
 	# ---------------- Area III: The Corridor ----------------
 	_floor(3000.0, 3500.0)
 	_floor(3950.0, 4600.0)
-	var orb_r := Interactable.new().setup("orb_recollect", Vector2(3200, FLOOR_Y), "Take the amber memory")
+	var orb_r := Interactable.new().setup("orb_recollect", Vector2(3200, FLOOR_Y), "take the warm light")
 	orb_r.color = Palette.RECOLLECT
 	add_child(orb_r)
 	orb_r.on_use = func():
 		orb_r.used = true
 		player.has_recollection = true
 		_sfx("chime")
-		_show_text("RECOLLECTION.  Press R to restore what was broken. It will not last.", 6.0)
+		_show_text("warm. like remembering the end of a song. [R] puts broken things back, but never for long.", 6.0)
 	# Broken bridge (restored by Recollection)
 	for i in 5:
-		add_child(Solid.new().setup(Rect2(3500.0 + i * 90.0, FLOOR_Y, 90.0, 16.0), Solid.Mode.BROKEN, Palette.PLANK, Palette.PLANK))
-	# The one door that is different (red knob)
-	var d3 := _make_door(4572.0, "Open the different door")
+		add_child(Solid.new().setup(Rect2(3500.0 + i * 90.0, FLOOR_Y, 90.0, 16.0), Solid.Mode.BROKEN, "plank"))
+	# The one door that is different (red handle)
+	var d3 := _make_door(4572.0, "open the red-handled door")
 	var door3: Interactable = d3[0]
 	var wall3: Solid = d3[1]
-	door3.knob = Palette.PLAYER_SCARF
+	door3.odd = true
 	door3.on_use = func():
 		door3.opened = true
 		wall3.set_enabled(false)
 		_sfx("chime")
-		_show_text("It leads somewhere you have been avoiding.", 4.0)
+		_show_text("i don't want to go in there. ...i'm going in.", 4.0)
 
 	# ---------------- Area IV: The Forgotten Room ----------------
 	_floor(4600.0, 6000.0)
@@ -244,19 +246,19 @@ func _build_level() -> void:
 	for d in defs:
 		var shape_name: String = d[0]
 		var label := "music box" if shape_name == "musicbox" else shape_name
-		var o := Interactable.new().setup("object", Vector2(d[1], FLOOR_Y), "Touch the " + label)
+		var o := Interactable.new().setup("object", Vector2(d[1], FLOOR_Y), "touch the " + label)
 		o.shape = shape_name
 		o.symbol_count = d[2]
 		o.on_use = func(): _on_object_used(shape_name, o)
 		add_child(o)
 	# Broken stairs up to the exit (restored by Recollection)
 	for r in [Rect2(5640, 500, 80, 60), Rect2(5720, 440, 80, 120), Rect2(5800, 380, 80, 180), Rect2(5880, 320, 120, 240)]:
-		add_child(Solid.new().setup(r, Solid.Mode.BROKEN, Palette.STONE, Palette.STONE))
+		add_child(Solid.new().setup(r, Solid.Mode.BROKEN, "stairs"))
 	# Hidden exit (revealed by Echo)
-	var exit_door := Interactable.new().setup("exit", Vector2(5950, 320), "Go through", true)
+	var exit_door := Interactable.new().setup("exit", Vector2(5950, 320), "go through", true)
 	exit_door.on_use = func():
 		if not memory_complete:
-			_show_text("Not yet. The memory is still scattered.", 3.5)
+			_show_text("not yet. i still don't remember all of it.", 3.5)
 			return
 		_run_ending()
 	add_child(exit_door)
@@ -273,14 +275,14 @@ func _build_level() -> void:
 	]
 
 	hints = [
-		{"x": 160.0, "text": "Familiar. Warm. Empty.", "shown": false},
-		{"x": 1500.0, "text": "The colours have been drained from everything in here.", "shown": false},
-		{"x": 1960.0, "text": "The floor ahead is gone. Perhaps it is only forgotten. [Q]", "shown": false},
-		{"x": 2700.0, "text": "A doorway is hiding somewhere near the far wall. [Q]", "shown": false},
-		{"x": 3350.0, "text": "The bridge is in pieces. What was whole can be whole again. [R]", "shown": false},
-		{"x": 4100.0, "text": "Every door looks the same. Except one.", "shown": false},
-		{"x": 4950.0, "text": "These things want to be touched in the right order. [Q]", "shown": false},
-		{"x": 5500.0, "text": "The way up is broken. The way out is hidden. [R] [Q]", "shown": false},
+		{"x": 160.0, "text": "it's so quiet. someone should be dancing.", "shown": false},
+		{"x": 1500.0, "text": "the paintings are watching me. ...they're paintings. it's fine.", "shown": false},
+		{"x": 1960.0, "text": "the floor just stops. maybe it's not gone, maybe i just forgot it. try [Q].", "shown": false},
+		{"x": 2700.0, "text": "there's a door in here somewhere. i can feel it. [Q] again?", "shown": false},
+		{"x": 3350.0, "text": "the bridge is in bits. if i can remember how it went together... [R]", "shown": false},
+		{"x": 4100.0, "text": "every door looks the same. except one.", "shown": false},
+		{"x": 4950.0, "text": "those three things want to be touched in the right order. [Q] might show me.", "shown": false},
+		{"x": 5500.0, "text": "the way up is broken and the way out is hidden. [R] then [Q], i think.", "shown": false},
 	]
 
 
@@ -308,12 +310,33 @@ func _build_ui() -> void:
 	vig.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	ui.add_child(vig)
 
-	hud_label = _make_label(Vector2(20, 14), Vector2(500, 90), 18, HORIZONTAL_ALIGNMENT_LEFT)
-	ui.add_child(hud_label)
+	hud_echo = _make_hud_item("icon_echo", "q", Vector2(20, 16))
+	hud_rec = _make_hud_item("icon_recollect", "r", Vector2(20, 60))
+	ui.add_child(hud_echo)
+	ui.add_child(hud_rec)
 
-	msg_label = _make_label(Vector2(96, 470), Vector2(960, 80), 24)
-	msg_label.modulate.a = 0.0
-	ui.add_child(msg_label)
+	msg_panel = NinePatchRect.new()
+	msg_panel.texture = Util.tex("panel")
+	msg_panel.patch_margin_left = 12
+	msg_panel.patch_margin_top = 12
+	msg_panel.patch_margin_right = 12
+	msg_panel.patch_margin_bottom = 12
+	# Smaller dialogue box near the top of the screen
+	msg_panel.position = Vector2(96, 24)
+	msg_panel.size = Vector2(960, 88)
+	msg_panel.modulate.a = 0.0
+	msg_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	ui.add_child(msg_panel)
+	# Dialogue text
+	msg_label = _make_label(
+		Vector2(28, 8),
+		Vector2(904, 72),
+		18,
+		HORIZONTAL_ALIGNMENT_LEFT
+	)
+	msg_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	msg_label.visible_characters = 0
+	msg_panel.add_child(msg_label)
 
 	prompt_label = _make_label(Vector2(96, 585), Vector2(960, 40), 20)
 	ui.add_child(prompt_label)
@@ -337,7 +360,7 @@ func _build_ui() -> void:
 	var t2 := _make_label(Vector2(0, 245), Vector2(1152, 40), 24)
 	t2.text = "a fractured memory"
 	var t3 := _make_label(Vector2(0, 340), Vector2(1152, 200), 20)
-	t3.text = "A / D  move        Space  jump        E  interact\nQ  Echo        R  Recollection        (once you find them)\n\nPress ENTER to begin"
+	t3.text = "a / d  move        space  jump        e  interact\nq  echo        r  recollection        (once you find them)\n\npress ENTER to begin"
 	title_panel.add_child(t1)
 	title_panel.add_child(t2)
 	title_panel.add_child(t3)
@@ -351,11 +374,30 @@ func _make_label(pos: Vector2, sz: Vector2, font_size: int, align: int = HORIZON
 	l.horizontal_alignment = align
 	l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	l.add_theme_font_size_override("font_size", font_size)
+	Util.style_label(l, font_size >= 40)
 	l.add_theme_color_override("font_color", Color("efe6d6"))
-	l.add_theme_color_override("font_outline_color", Color.BLACK)
-	l.add_theme_constant_override("outline_size", 6)
+	l.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.85))
+	l.add_theme_constant_override("shadow_offset_x", 2)
+	l.add_theme_constant_override("shadow_offset_y", 2)
 	return l
+
+
+func _make_hud_item(icon_name: String, key: String, pos: Vector2) -> Control:
+	var c := Control.new()
+	c.position = pos
+	c.visible = false
+	c.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var tr := TextureRect.new()
+	tr.texture = Util.tex(icon_name)
+	tr.size = Vector2(30, 30)
+	tr.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	tr.stretch_mode = TextureRect.STRETCH_SCALE
+	tr.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	c.add_child(tr)
+	var l := _make_label(Vector2(42, 4), Vector2(60, 24), 18, HORIZONTAL_ALIGNMENT_LEFT)
+	l.text = key
+	c.add_child(l)
+	return c
 
 
 func _make_player(stream: AudioStream, db: float) -> AudioStreamPlayer:
@@ -366,15 +408,40 @@ func _make_player(stream: AudioStream, db: float) -> AudioStreamPlayer:
 	return p
 
 
+
 func _build_audio() -> void:
-	drone = _make_player(Sounds.drone(), -17.0)
-	melody = _make_player(Sounds.melody(), -80.0)
-	sfx["tick"] = _make_player(Sounds.tick(), -20.0)
-	sfx["step"] = _make_player(Sounds.step(), -22.0)
-	sfx["chime"] = _make_player(Sounds.chime(), -8.0)
-	sfx["echo"] = _make_player(Sounds.echo(), -8.0)
-	sfx["recollect"] = _make_player(Sounds.recollect(), -8.0)
-	sfx["stinger"] = _make_player(Sounds.stinger(), -4.0)
+	# Background music
+	music = AudioStreamPlayer.new()
+	music.name = "BackgroundMusic"
+	add_child(music)
+
+	var track_path = "res://audio/music/The_Caretaker_-_Libet_s_Delay_(mp3.pm).mp3"
+	var track = load("res://audio/music/The_Caretaker_-_Libet_s_Delay_(mp3.pm).mp3") as AudioStreamMP3
+
+	if track:
+		track.loop = true
+		music.stream = track
+		music.volume_db = -12.0
+
+	# Sound effects
+	var sound_streams = {
+		"tick": Sounds.tick(),
+		"step": Sounds.step(),
+		"chime": Sounds.chime(),
+		"echo": Sounds.echo(),
+		"recollect": Sounds.recollect(),
+		"stinger": Sounds.stinger(),
+		"blip": Sounds.blip()
+	}
+
+	for sound_name in sound_streams:
+		var player := AudioStreamPlayer.new()
+		player.name = sound_name
+		player.stream = sound_streams[sound_name]
+		player.volume_db = -80.0
+		add_child(player)
+		sfx[sound_name] = player
+
 
 
 func _sfx(sound: String) -> void:
@@ -403,9 +470,8 @@ func _start_game() -> void:
 	state = State.PLAYING
 	title_panel.visible = false
 	player.controls_enabled = true
-	drone.play()
-	melody.play()
-	_show_text("Where... am I?", 4.0)
+	music.play()
+	_show_text("huh. i know this room. why do i know this room?", 4.0)
 
 
 func _update_playing(delta: float) -> void:
@@ -420,8 +486,13 @@ func _update_playing(delta: float) -> void:
 			cp_x = cp[0]
 			checkpoint_pos = cp[1]
 
+	# Hints wait for the current line to finish, and expire if you've already walked well past them.
 	for h in hints:
-		if not h["shown"] and px >= h["x"]:
+		if h["shown"] or px < h["x"]:
+			continue
+		if px > h["x"] + 500.0:
+			h["shown"] = true
+		elif _text_idle():
 			h["shown"] = true
 			_show_text(h["text"], 4.5)
 
@@ -459,11 +530,11 @@ func _change_area(a: int) -> void:
 		watcher_timer = 5.0
 		match a:
 			1:
-				_show_text("THE GALLERY", 3.0)
+				_show_text("the colours are all wrong in here. like someone washed them out.", 4.0)
 			2:
-				_show_text("THE CORRIDOR\nYou feel like you have walked this hall before.", 4.0)
+				_show_text("wait. haven't i walked this hall already?", 4.0)
 			3:
-				_show_text("THE FORGOTTEN ROOM", 3.0)
+				_show_text("it's so quiet in here.", 3.0)
 	elif a < prev:
 		backdrop.anomaly[a] += 1       # coming back: something is different
 		watcher_timer = 3.0
@@ -473,7 +544,7 @@ func _respawn() -> void:
 	if respawning:
 		return
 	respawning = true
-	_show_text("Bounce back.", 2.5)
+	_show_text("ow. okay. bounce back.", 2.5)
 	var tw := create_tween()
 	tw.tween_property(fade_rect, "color:a", 1.0, 0.25)
 	tw.tween_callback(func():
@@ -498,7 +569,7 @@ func _on_object_used(shape_name: String, item: Interactable) -> void:
 		seq_progress.clear()
 		blackout = 0.8
 		_sfx("stinger")
-		_show_text("That is not how it happened.", 3.0)
+		_show_text("no. that's not how it went.", 3.0)
 		return
 	if seq_progress.size() == SEQ_ORDER.size():
 		_complete_memory()
@@ -507,10 +578,10 @@ func _on_object_used(shape_name: String, item: Interactable) -> void:
 func _complete_memory() -> void:
 	memory_complete = true
 	var lines := [
-		"The music box played. You sat and waited.",
-		"The clock kept going. Nobody came back through the door.",
-		"So you ran. And the world cracked behind you.",
-		"The pieces are still here. Put the way back together.",
+		"the music box was playing. i sat there and waited.",
+		"the clock kept going. nobody came back through the door.",
+		"so i ran. and everything cracked behind me.",
+		"...the pieces are still here. i can put it back together.",
 	]
 	for line in lines:
 		if state != State.PLAYING:
@@ -567,7 +638,7 @@ func _update_encounter(delta: float) -> void:
 				scripted.appear(5560.0, FLOOR_Y, -1.0)
 				encounter_state = 2
 				encounter_timer = 0.0
-				_show_text("Someone is standing at the far end of the room.", 4.0)
+				_show_text("someone's standing at the far end of the room. they're not moving.", 4.0)
 		2:
 			encounter_timer += delta
 			if absf(px - scripted.position.x) < 320.0 or encounter_timer > 16.0:
@@ -582,7 +653,7 @@ func _update_encounter(delta: float) -> void:
 				blackout = 0.5
 				shake = 1.0
 				_sfx("stinger")
-				_show_text("Don't look away.", 3.0)
+				_show_text("it's behind me. don't turn around.", 3.0)
 				encounter_state = 4
 				encounter_timer = 0.0
 		4:
@@ -615,19 +686,25 @@ func _update_visuals(delta: float) -> void:
 	backdrop.view_x = player.global_position.x
 
 	# on-screen message
-	if msg_timer > 0.0:
+	var total := msg_label.text.length()
+	if msg_label.visible_characters < total:
+		var before := msg_label.visible_characters
+		type_pos += delta * 42.0
+		msg_label.visible_characters = mini(int(type_pos), total)
+		var now := msg_label.visible_characters
+		if now != before and now > 0 and now % 2 == 0 and msg_label.text[now - 1] != " ":
+			sfx["blip"].pitch_scale = randf_range(0.9, 1.2)
+			sfx["blip"].play()
+		msg_panel.modulate.a = 1.0
+	elif msg_timer > 0.0:
 		msg_timer -= delta
-		msg_label.modulate.a = clampf(msg_timer / 0.6, 0.0, 1.0)
+		msg_panel.modulate.a = clampf(msg_timer / 0.6, 0.0, 1.0)
 	else:
-		msg_label.modulate.a = 0.0
+		msg_panel.modulate.a = 0.0
 
 	# HUD
-	var lines := PackedStringArray()
-	if player.has_echo:
-		lines.append("Q   Echo")
-	if player.has_recollection:
-		lines.append("R   Recollection")
-	hud_label.text = "\n".join(lines)
+	hud_echo.visible = player.has_echo
+	hud_rec.visible = player.has_recollection
 
 	# camera shake
 	if shake > 0.0:
@@ -643,22 +720,26 @@ func _update_visuals(delta: float) -> void:
 	var drone_target := -17.0
 	var mel_db: float = AREA_MELODY_DB[current_area]
 	var mel_pitch: float = AREA_MELODY_PITCH[current_area]
+
 	if silent:
 		drone_target = -80.0
 		mel_db = -80.0
+
 	if ending_music:
 		drone_target = -80.0
 		mel_db = -10.0
 		mel_pitch = 1.0
-	drone.volume_db = lerpf(drone.volume_db, drone_target, clampf(delta * 6.0, 0.0, 1.0))
-	melody.volume_db = lerpf(melody.volume_db, mel_db, clampf(delta * 2.0, 0.0, 1.0))
-	melody.pitch_scale = lerpf(melody.pitch_scale, mel_pitch, clampf(delta * 0.8, 0.0, 1.0))
+
+func _text_idle() -> bool:
+	return msg_label.visible_characters >= msg_label.text.length() and msg_timer <= 0.0
 
 
 func _show_text(text: String, duration: float = 4.0) -> void:
 	msg_label.text = text
+	msg_label.visible_characters = 0
+	type_pos = 0.0
 	msg_timer = duration
-	msg_label.modulate.a = 1.0
+	msg_panel.modulate.a = 1.0
 
 
 func _spawn_pulse(origin: Vector2, col: Color, radius: float) -> void:
@@ -696,16 +777,16 @@ func _run_ending() -> void:
 	player.controls_enabled = false
 	ending_music = true
 	prompt_label.text = ""
-	msg_label.modulate.a = 0.0
+	msg_panel.modulate.a = 0.0
 	var tw := create_tween()
 	tw.tween_property(fade_rect, "color:a", 1.0, 3.0)
 	await tw.finished
 	end_label.visible = true
 	var lines := [
-		"You remember now.",
-		"The door never opened. Waiting hurt too much, so you ran, and the world cracked around you.",
-		"But you came back through every broken room.",
-		"You fell. You stood up. You bounced back.",
+		"i remember now.",
+		"the door never opened. waiting hurt too much, so i ran, and the whole world cracked.",
+		"but i came back through every broken room.",
+		"i fell. i got up. i bounced back.",
 		"THE END",
 	]
 	for line in lines:

@@ -1,6 +1,11 @@
-[gd_scene load_steps=2 format=3]
+[gd_scene format=3 uid="uid://cg2ww61g4ahgn"]
 
-[ext_resource type="Script" path="res://main.gd" id="1"]
+[ext_resource type="Script" uid="uid://bmaqj1ggk4ifx" path="res://main.gd" id="1"]
+[ext_resource type="AudioStream" path="res://audio/The_Caretaker_-_Libet_s_Delay_(mp3.pm).mp3" id="2_0xm2m"]
 
-[node name="Main" type="Node2D"]
+[node name="Main" type="Node2D" unique_id=1619790951]
 script = ExtResource("1")
+
+[node name="Music" type="AudioStreamPlayer" parent="." unique_id=1253385293]
+stream = ExtResource("2_0xm2m")
+autoplay = true

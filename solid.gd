@@ -4,13 +4,18 @@ extends StaticBody2D
 ##   NORMAL - always solid (floors, walls)
 ##   HIDDEN - invisible and intangible until revealed by ECHO
 ##   BROKEN - scattered fragments until restored by RECOLLECTION
+##
+## `theme` picks the tile art: "ballroom" / "gallery" / "corridor" / "forgotten" (floors,
+## chosen automatically from position), "plank" / "stairs" (broken pieces), "slab" (hidden
+## platforms) or "wall" (invisible collision).
 
 enum Mode { NORMAL, HIDDEN, BROKEN }
 
+const TILE := 16.0 * Util.PX
+
 var size := Vector2(100, 20)
 var mode: int = Mode.NORMAL
-var color := Palette.FLOOR_COL
-var top_color := Palette.FLOOR_TOP
+var theme := ""
 var enabled := true            # lets doors switch walls off
 var visible_time := 0.0        # echo timer
 var restore_time := 0.0        # recollection timer
@@ -22,12 +27,11 @@ var _last_solid := true
 
 
 ## rect.position is the top-left corner of the block.
-func setup(rect: Rect2, m: int = Mode.NORMAL, col: Color = Palette.FLOOR_COL, top: Color = Palette.FLOOR_TOP) -> Solid:
+func setup(rect: Rect2, m: int = Mode.NORMAL, theme_name: String = "") -> Solid:
 	position = rect.position
 	size = rect.size
 	mode = m
-	color = col
-	top_color = top
+	theme = theme_name if theme_name != "" else Util.AREA_THEMES[Util.area_for_x(position.x)]
 	var shape := RectangleShape2D.new()
 	shape.size = size
 	_shape = CollisionShape2D.new()
@@ -92,7 +96,23 @@ func _process(delta: float) -> void:
 	queue_redraw()
 
 
-# --- Drawing (placeholder shapes; swap for sprites/tiles later) -----------
+# --- Drawing ---------------------------------------------------------------
+
+## Tiles `t` across r at PX scale, clipping the last row/column so any size works.
+func _tile(t: Texture2D, r: Rect2, mod: Color = Color.WHITE) -> void:
+	var tw := t.get_width() * Util.PX
+	var th := t.get_height() * Util.PX
+	var y := 0.0
+	while y < r.size.y - 0.01:
+		var h := minf(th, r.size.y - y)
+		var x := 0.0
+		while x < r.size.x - 0.01:
+			var w := minf(tw, r.size.x - x)
+			draw_texture_rect_region(t, Rect2(r.position + Vector2(x, y), Vector2(w, h)),
+					Rect2(0, 0, w / Util.PX, h / Util.PX), mod)
+			x += tw
+		y += th
+
 
 func _draw() -> void:
 	match mode:
@@ -105,13 +125,13 @@ func _draw() -> void:
 
 
 func _draw_normal() -> void:
-	draw_rect(Rect2(Vector2.ZERO, size), color)
-	draw_rect(Rect2(0, 0, size.x, minf(10.0, size.y)), top_color)
-	if size.y >= 100.0:
-		var x := 0.0
-		while x < size.x:
-			draw_line(Vector2(x, 10), Vector2(x, 20), color.darkened(0.3), 2.0)
-			x += 48.0
+	if theme == "wall":
+		return
+	var top := Util.tex("floor_%s_top" % theme)
+	var fill := Util.tex("floor_%s_fill" % theme)
+	_tile(top, Rect2(0, 0, size.x, minf(TILE, size.y)))
+	if size.y > TILE:
+		_tile(fill, Rect2(0, TILE, size.x, size.y - TILE))
 
 
 func _draw_hidden() -> void:
@@ -120,27 +140,32 @@ func _draw_hidden() -> void:
 		a = clampf(visible_time / 0.4, 0.0, 1.0)
 		if visible_time < 1.5:
 			a *= 0.6 + 0.4 * sin(visible_time * 22.0)
-	var faint := 0.06 + 0.04 * sin(Time.get_ticks_msec() / 400.0 + position.x)
+	var faint := 0.10 + 0.05 * sin(Time.get_ticks_msec() / 400.0 + position.x)
 	var r := Rect2(Vector2.ZERO, size)
-	draw_rect(r, Color(color, faint), false, 2.0)
+	# a faint dotted hint of where something used to be
+	var x := 0.0
+	while x < size.x:
+		draw_rect(Rect2(x, 0, 4, 4), Color(Palette.ECHO, faint))
+		x += 16.0
 	if a > 0.0:
-		draw_rect(r, Color(color, 0.55 * a))
-		draw_rect(r, Color(color.lightened(0.4), a), false, 2.0)
+		_tile(Util.tex("tile_" + theme), r, Color(0.65, 0.92, 1.0, a))
+		draw_rect(r, Color(Palette.ECHO, 0.25 * a))
 
 
 func _draw_broken() -> void:
 	var amt := restore_amount
+	var t := Util.tex("tile_" + theme)
 	var pieces := maxi(3, int(size.x / 15.0))
 	var pw := size.x / pieces
-	var alpha := lerpf(0.45, 1.0, amt)
+	var alpha := lerpf(0.5, 1.0, amt)
+	var col := Color(1, 1, 1, alpha)
 	for i in pieces:
 		var sv: Vector3 = _seeds[i % _seeds.size()]
 		var off := Vector2(sv.x * 26.0, sv.y * 34.0 - 8.0) * (1.0 - amt)
 		var rot := sv.z * 0.7 * (1.0 - amt)
 		draw_set_transform(Vector2((i + 0.5) * pw, size.y * 0.5) + off, rot, Vector2.ONE)
-		draw_rect(Rect2(-pw * 0.5, -size.y * 0.5, pw, size.y), Color(color, alpha))
-		draw_rect(Rect2(-pw * 0.5, -size.y * 0.5, pw, minf(6.0, size.y)), Color(color.lightened(0.3), alpha))
+		_tile(t, Rect2(-pw * 0.5, -size.y * 0.5, pw, size.y), col)
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 	if restore_time > 0.0 and restore_time < 1.5:
 		var blink := 0.5 + 0.5 * sin(restore_time * 22.0)
-		draw_rect(Rect2(Vector2.ZERO, size), Color(Palette.RECOLLECT, 0.6 * blink), false, 2.0)
+		draw_rect(Rect2(Vector2.ZERO, size), Color(Palette.RECOLLECT, 0.5 * blink), false, 2.0)

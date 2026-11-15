@@ -64,18 +64,10 @@ func _process(delta: float) -> void:
 func _draw() -> void:
 	if alpha <= 0.0:
 		return
-	var c := Color(Palette.WATCHER, alpha)
-	var body := PackedVector2Array([
-		Vector2(-13, -104), Vector2(13, -104), Vector2(19, -40),
-		Vector2(11, 0), Vector2(-11, 0), Vector2(-19, -40)
-	])
-	draw_colored_polygon(body, c)
-	draw_circle(Vector2(0, -118), 12.0, c)
-	draw_rect(Rect2(-26, -100, 7, 74), c)   # long arms
-	draw_rect(Rect2(19, -100, 7, 74), c)
-	var outline := body.duplicate()
-	outline.append(body[0])
-	draw_polyline(outline, Color(0.7, 0.72, 0.85, alpha * 0.35), 1.5)
-	var ex := facing * 3.0
-	draw_rect(Rect2(-6 + ex, -121, 3, 2), Color(1, 1, 1, alpha))
-	draw_rect(Rect2(3 + ex, -121, 3, 2), Color(1, 1, 1, alpha))
+	# a faint stutter, like it isn't quite there
+	var flicker := 1.0 if randf() > 0.04 else 0.55
+	var t := Util.tex("watcher")
+	var s := t.get_size() * Util.PX
+	draw_set_transform(Vector2.ZERO, 0.0, Vector2(facing, 1.0))
+	draw_texture_rect(t, Rect2(Vector2(-s.x * 0.5, -s.y), s), false, Color(1, 1, 1, alpha * flicker))
+	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
